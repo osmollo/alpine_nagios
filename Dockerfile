@@ -1,13 +1,4 @@
-### ================================== ###
-###   STAGE 1 CREATE PARENT IMAGE      ###
-### ================================== ###
-
-# https://www.docker.com/blog/docker-arm-virtual-meetup-multi-arch-with-buildx/
-
 FROM alpine:3.15 as builder-base
-
-ARG TARGETPLATFORM
-ARG BUILDPLATFORM
 
 ENV NAGIOS_HOME=/opt/nagios \
     NAGIOS_USER=nagios \
@@ -17,50 +8,48 @@ ENV NAGIOS_HOME=/opt/nagios \
     NAGIOS_TIMEZONE=UTC \
     NAGIOS_FQDN=nagios.example.com \
     NAGIOSADMIN_USER=nagiosadmin \
-    NAGIOSADMIN_PASS=s0l0sysADM \
+    NAGIOSADMIN_PASS=QueiC8waz5thea9ooMoh6yee \
     NAGIOS_VERSION=4.4.11 \
     NAGIOS_PLUGINS_VERSION=2.4.4 \
     NRPE_VERSION=4.1.0 \
     APACHE_LOCK_DIR=/var/run \
     APACHE_LOG_DIR=/var/log/apache2
 
+LABEL name="Nagios" \
+      nagiosVersion=$NAGIOS_VERSION \
+      nagiosPluginsVersion=$NAGIOS_PLUGINS_VERSION \
+      nrpeVersion=$NRPE_VERSION \
+      homepage="https://www.nagios.com/" \
+      build="12"
+
+### ================================== ###
+###   STAGE 1 CREATE PARENT IMAGE      ###
+### ================================== ###
 
 RUN addgroup -S ${NAGIOS_GROUP} && \
     adduser  -S ${NAGIOS_USER} -G ${NAGIOS_CMDGROUP} -g ${NAGIOS_USER} && \
     apk update && \
     apk add --no-cache git curl unzip apache2 apache2-utils rsyslog \
-                        php7 php7-gd php7-cli runit parallel ssmtp \
+                        php7 php7-gd php7-cli runit parallel \
                         libltdl libintl openssl-dev php7-apache2 procps tzdata \
                         libldap mariadb-connector-c freeradius-client-dev libpq libdbi \
                         lm-sensors perl net-snmp-perl perl-net-snmp perl-crypt-x509 \
                         perl-timedate perl-libwww perl-text-glob samba-client openssh openssl \
-                        net-snmp-tools bind-tools gd gd-dev && \
+                        net-snmp-tools bind-tools gd gd-dev python3 py3-pip && \
                                                 \
-    : '# For x86 the binary is : gosu-i386' && \
-    : '# For x64 the binary is : gosu-amd64' && \
-    : '# For arm-v6 the binary is : gosu-armel' && \
-    : '# For arm-v7 the binary is : gosu-armhf' && \
-    : '# For arm64 the binary is : gosu-arm64' && \
-    : '# For arm64/v8 the binary is : gosu-arm64' && \
-    : '#######################################' && \
-    : '# Creating an associative array with the platforms and their respective gosu release DOES NOT WORK in /bin/sh' && \
-    echo "Arguments TARGETPLATFORM: ${TARGETPLATFORM} and BUILDPLATFORM: ${BUILDPLATFORM}" && \
-    echo "$TARGETPLATFORM" | awk '{ gosuBinArr["linux/386"]="gosu-i386"; gosuBinArr["linux/amd64"]="gosu-amd64"; gosuBinArr["linux/arm/v6"]="gosu-armel"; gosuBinArr["linux/arm/v7"]="gosu-armhf"; gosuBinArr["linux/arm64"]="gosu-arm64"; gosuBinArr["linux/arm64/v8"]="gosu-arm64"; print gosuBinArr[$0];}' > mygosuver.txt && \
-    gosuPlatform=$(cat mygosuver.txt) && \
-    echo "Downloading ${gosuPlatform} for platform $TARGETPLATFORM" &&\
-    curl -L -o gosu "https://github.com/tianon/gosu/releases/download/1.13/${gosuPlatform}"  && \
+    echo "Downloading gosu" &&\
+    curl -L -o gosu "https://github.com/tianon/gosu/releases/download/1.13/gosu-amd64"  && \
     mv gosu /bin/ && \
     chmod 755 /bin/gosu && \
     chmod +s /bin/gosu && \
     addgroup -S apache ${NAGIOS_CMDGROUP}
-    
+
+
 ### ================================== ###
 ###   STAGE 2 COMPILE NAGIOS SOURCES   ###
 ### ================================== ###
 
 FROM builder-base as builder-compile
-ARG TARGETPLATFORM
-ARG BUILDPLATFORM
 
 # Add dependencies required to build Nagios
 RUN apk update && \
@@ -74,7 +63,7 @@ RUN apk update && \
                         mariadb-connector-c-dev perl \
                         net-snmp-dev openldap-dev openssl-dev postgresql-dev
 
-# Download Nagios core, plugins and nrpe sources                        
+# Download Nagios core, plugins and nrpe sources
 RUN    cd /tmp && \
        echo -n "Downloading Nagios ${NAGIOS_VERSION} source code: " && \
        wget -O nagios-core.tar.gz "https://github.com/NagiosEnterprises/nagioscore/archive/nagios-${NAGIOS_VERSION}.tar.gz" && \
@@ -82,9 +71,7 @@ RUN    cd /tmp && \
        wget -O nagios-plugins.tar.gz "https://github.com/nagios-plugins/nagios-plugins/archive/release-${NAGIOS_PLUGINS_VERSION}.tar.gz" && \
        echo -n -e "OK\nDownloading NRPE ${NRPE_VERSION} source code: " && \
        wget -O nrpe.tar.gz "https://github.com/NagiosEnterprises/nrpe/archive/nrpe-${NRPE_VERSION}.tar.gz" && \
-       env && \
-       echo "I am running on $BUILDPLATFORM, building for $TARGETPLATFORM !! == " && \
-       echo "OK"
+       env
 
 # Compile Nagios Core
 RUN    ls -l /tmp && cd /tmp && \
@@ -156,11 +143,9 @@ RUN    echo -e "\n\n =====================\n  Configure NRPE\n =================
        cp src/check_nrpe ${NAGIOS_HOME}/libexec/                                && \
        echo "NRPE installed successfully: OK" && \
        echo -n "Final Nagios installed size: " && \
-       du -h -s ${NAGIOS_HOME} 
+       du -h -s ${NAGIOS_HOME}
 
 # Compile Nagios files
-# Create SSMTP configuration
-
 
 # RUN sed -i.bak 's/.*\=www\-data//g' /etc/apache2/envvars
 RUN export DOC_ROOT="DocumentRoot $(echo $NAGIOS_HOME/share)"                                        && \
@@ -169,15 +154,6 @@ RUN export DOC_ROOT="DocumentRoot $(echo $NAGIOS_HOME/share)"                   
     sed -i 's/^\(.*\)#\(LoadModule cgi_module\)\(.*\)/\1\2\3/' /etc/apache2/httpd.conf               && \
     echo "ServerName ${NAGIOS_FQDN}" >> /etc/apache2/httpd.conf
 
-RUN sed -i 's,/bin/mail,/usr/bin/mail,' ${NAGIOS_HOME}/etc/objects/commands.cfg  && \
-    sed -i 's,/usr/usr,/usr,'           ${NAGIOS_HOME}/etc/objects/commands.cfg  && \
-                                                                                    \
-    : '# Modify Nagios mail commands in order to work with SSMTP'         && \
-    sed -i 's/^.*command_line.*Host Alert.*$//g' /opt/nagios/etc/objects/commands.cfg && \
-    sed -i 's/^.*command_line.*Service Alert.*$//g' /opt/nagios/etc/objects/commands.cfg && \
-    sed -i '/notify-host-by-email/a command_line /usr/bin/printf "%b" "Subject: $NOTIFICATIONTYPE$ Host Alert: $HOSTNAME$ is $HOSTSTATE$\\n\\n***** Nagios *****\\n\\nNotification Type: $NOTIFICATIONTYPE$\\nHost: $HOSTNAME$\\nState: $HOSTSTATE$\\nAddress: $HOSTADDRESS$\\nInfo: $HOSTOUTPUT$\\n\\nDate/Time: $LONGDATETIME$\\n" | /usr/sbin/sendmail -v $CONTACTEMAIL$' ${NAGIOS_HOME}/etc/objects/commands.cfg  && \
-    sed -i '/notify-service-by-email/a command_line /usr/bin/printf "%b" "Subject: $NOTIFICATIONTYPE$ Service Alert: $HOSTALIAS$/$SERVICEDESC$ is $SERVICESTATE$\\n\\n***** Nagios *****\\n\\nNotification Type: $NOTIFICATIONTYPE$\\n\\nService: $SERVICEDESC$\\nHost: $HOSTALIAS$\\nAddress: $HOSTADDRESS$\\nState: $SERVICESTATE$\\n\\nDate/Time: $LONGDATETIME$\\n\\nAdditional Info:\\n\\n$SERVICEOUTPUT$\\n" | /usr/sbin/sendmail -v $CONTACTEMAIL$' ${NAGIOS_HOME}/etc/objects/commands.cfg
-
 RUN echo "use_timezone=${NAGIOS_TIMEZONE}" >> ${NAGIOS_HOME}/etc/nagios.cfg && \
     sed -i 's/date_format=us/date_format=iso8601/g' ${NAGIOS_HOME}/etc/nagios.cfg
 
@@ -185,7 +161,7 @@ RUN echo "use_timezone=${NAGIOS_TIMEZONE}" >> ${NAGIOS_HOME}/etc/nagios.cfg && \
 RUN mkdir -p /orig/apache2                     && \
     cp -r /etc/apache2/*  /orig/apache2        && \
     cp -r ${NAGIOS_HOME}/etc  /orig/etc        && \
-    cp -r ${NAGIOS_HOME}/var  /orig/var         
+    cp -r ${NAGIOS_HOME}/var  /orig/var
 
 
 ### ========================== ###
@@ -193,16 +169,6 @@ RUN mkdir -p /orig/apache2                     && \
 ### ========================== ###
 
 FROM builder-base
-
-MAINTAINER Oscar Hermosa <osmollo@proton.me>
-
-LABEL name="Nagios" \
-      nagiosVersion=$NAGIOS_VERSION \
-      nagiosPluginsVersion=$NAGIOS_PLUGINS_VERSION \
-      nrpeVersion=$NRPE_VERSION \
-      homepage="https://www.nagios.com/" \
-      maintainer="Oscar Hermosa <osmollo@proton.me>" \
-      build="12"
 
 RUN mkdir -p ${NAGIOS_HOME}  && \
     mkdir -p /orig/apache2
@@ -214,7 +180,7 @@ COPY --from=builder-compile /orig /orig
 
 ADD overlay/ /
 
-# Make 
+# Make
 RUN chmod +x /usr/local/bin/start_nagios                 \
             /etc/sv/apache/run                           \
             /etc/sv/nagios/run                           \
@@ -224,6 +190,8 @@ RUN chmod +x /usr/local/bin/start_nagios                 \
             : '# enable all runit services'           && \
             ln -s /etc/sv/* /etc/service              && \
                                                          \
+            : '# Copy initial settings files'         && \
+            chown -R nagios:nagios ${NAGIOS_HOME}     && \
             : '# Create special dirs'                 && \
             (mkdir /run/apache2 || true)              && \
             mkdir -p /var/spool/rsyslog               && \
@@ -232,18 +200,10 @@ RUN chmod +x /usr/local/bin/start_nagios                 \
             : '# Convert files to Unix format'        && \
             dos2unix /etc/rsyslog.conf                && \
             dos2unix /usr/local/bin/start_nagios      && \
-            dos2unix /etc/sv/**/run                   && \
-            dos2unix /etc/ssmtp/ssmtp.conf            && \
-            : '# Configure Nagios'                    && \
-            cp /etc/cfg/* ${NAGIOS_HOME}/etc/         && \
-            cp /etc/our_checks/* ${NAGIOS_HOME}/libexec/ && \
-            : '# Copy initial settings files'         && \
-            chown -R nagios:nagios ${NAGIOS_HOME}     && \
-            : '# Add mail symbolic links to ssmtp'    && \
-            ln -s $(which ssmtp) /bin/mail            && \
-            ln -s $(which ssmtp) /usr/sbin/mail
-            
-            
+            dos2unix /etc/sv/**/run
+
+
+
 EXPOSE 80
 
 VOLUME "${NAGIOS_HOME}/var" "${NAGIOS_HOME}/etc" "/var/log/apache2" "/opt/Custom-Nagios-Plugins"
