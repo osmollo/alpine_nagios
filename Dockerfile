@@ -1,6 +1,6 @@
 FROM alpine:3.15 as builder-base
 
-ENV NAGIOS_HOME=/opt/nagios \
+ENV NAGIOS_HOME=/usr/local/nagios \
     NAGIOS_USER=nagios \
     NAGIOS_GROUP=nagios \
     NAGIOS_CMDUSER=nagios \
