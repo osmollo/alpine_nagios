@@ -37,11 +37,3 @@ jobs:
         docker tag $docker_user/$docker_image:$docker_version $docker_user/$docker_image:latest
         docker push $docker_user/$docker_image:latest
 
-    - name: Create Release
-      id: create_release
-      uses: actions/create-release@latest
-      env:
-        GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
-      with:
-        tag_name: "${{ steps.version_info.outputs.prop }}"
-        release_name: Release v${{ steps.version_info.outputs.prop }}
