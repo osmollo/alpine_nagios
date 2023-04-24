@@ -26,6 +26,8 @@ LABEL name="Nagios" \
 ###   STAGE 1 CREATE PARENT IMAGE      ###
 ### ================================== ###
 
+COPY requeriments.txt /
+
 RUN addgroup -S ${NAGIOS_GROUP} && \
     adduser  -S ${NAGIOS_USER} -G ${NAGIOS_CMDGROUP} -g ${NAGIOS_USER} && \
     apk update && \
@@ -42,7 +44,9 @@ RUN addgroup -S ${NAGIOS_GROUP} && \
     mv gosu /bin/ && \
     chmod 755 /bin/gosu && \
     chmod +s /bin/gosu && \
-    addgroup -S apache ${NAGIOS_CMDGROUP}
+    addgroup -S apache ${NAGIOS_CMDGROUP} && \
+    pip3 install -r requeriments.txt && \
+-   rm -f requeriments.txt
 
 
 ### ================================== ###
