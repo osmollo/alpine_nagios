@@ -46,7 +46,7 @@ RUN addgroup -S ${NAGIOS_GROUP} && \
     chmod +s /bin/gosu && \
     addgroup -S apache ${NAGIOS_CMDGROUP} && \
     pip3 install -r requeriments.txt && \
--   rm -f requeriments.txt
+    rm -f requeriments.txt
 
 
 ### ================================== ###
