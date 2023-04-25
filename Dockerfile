@@ -6,7 +6,6 @@ ENV NAGIOS_HOME=/usr/local/nagios \
     NAGIOS_CMDUSER=nagios \
     NAGIOS_CMDGROUP=nagios \
     NAGIOS_TIMEZONE=UTC \
-    NAGIOS_FQDN=nagios.example.com \
     NAGIOSADMIN_USER=nagiosadmin \
     NAGIOSADMIN_PASS=QueiC8waz5thea9ooMoh6yee \
     NAGIOS_VERSION=4.4.11 \
@@ -156,7 +155,13 @@ RUN export DOC_ROOT="DocumentRoot $(echo $NAGIOS_HOME/share)"                   
     sed -i "s,DocumentRoot.*,$DOC_ROOT," /etc/apache2/httpd.conf                                     && \
     sed -i "s|^ *ScriptAlias.*$|ScriptAlias /cgi-bin $NAGIOS_HOME/sbin|g" /etc/apache2/httpd.conf    && \
     sed -i 's/^\(.*\)#\(LoadModule cgi_module\)\(.*\)/\1\2\3/' /etc/apache2/httpd.conf               && \
-    echo "ServerName ${NAGIOS_FQDN}" >> /etc/apache2/httpd.conf
+    echo "ServerName ${NAGIOS_FQDN:-localhost}" >> /etc/apache2/httpd.conf                           && \
+    echo "<VirtualHost *:80>" >> /etc/apache2/conf.d/default.conf                                    && \
+    echo "  ServerAdmin webmaster@localhost" >> /etc/apache2/conf.d/default.conf                     && \
+    echo "  DocumentRoot /var/www/localhost/htdocs" >> /etc/apache2/conf.d/default.conf              && \
+    echo "  ErrorLog \${APACHE_LOG_DIR}/error.log" >> /etc/apache2/conf.d/default.conf               && \
+    echo "  CustomLog \${APACHE_LOG_DIR}/access.log combined" >> /etc/apache2/conf.d/default.conf    && \
+    echo "</VirtualHost>" >> /etc/apache2/conf.d/default.conf
 
 RUN echo "use_timezone=${NAGIOS_TIMEZONE}" >> ${NAGIOS_HOME}/etc/nagios.cfg && \
     sed -i 's/date_format=us/date_format=iso8601/g' ${NAGIOS_HOME}/etc/nagios.cfg
